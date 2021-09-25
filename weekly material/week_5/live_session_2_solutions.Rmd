@@ -1,0 +1,196 @@
+---
+title: 'Live Session #2 - 9/23/2021'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+```
+
+## Importing a file
+Import a dataset from the California Safe Cosmetics Program (CSCP) in the 
+California Department of Public Health. The primary purpose of the CSCP is to 
+collect information on hazardous and potentially hazardous ingredients in cosmetic 
+products sold in California and to make this information available to the public. 
+
+Our goal is to look at data for products that have been reported to contain 
+titanium dioxide since 2015. Specifically, we are interested in identifying 
+whether or not titanium dioxide has been removed from products, and if so, how 
+long after being reported it was removed. Our end goal is to produce a sentence 
+to summarize the # of products that have had the chemical removed.
+
+```{r import}
+file_path <- "https://data.chhs.ca.gov/dataset/596b5eed-31de-4fd8-a645-249f3f9b19c4/resource/57da6c9a-41a7-44b0-ab8d-815ff2cd5913/download/cscpopendata.csv"
+
+#import full file just to see what it looks like
+cos_full <- read_csv(
+  file_path
+)
+
+```
+
+Let's import the file again, but this time only import the following columns and ensure they are the corresponding data types:
+* CDPHId - character
+* BrandName - character
+* PrimaryCategory - character 
+* ChemicalName - character
+* InitialDateReported - date
+* ChemicalDateRemoved - character (will convert later)
+```{r custom_import}
+
+#import only the columns we need
+cos_subset <- read_csv(
+  file_path,
+  col_types = cols_only(CDPHId = col_character(), ProductName = col_character(), BrandName = col_character(), PrimaryCategory = col_character(),ChemicalName = col_character(), InitialDateReported = col_date(format="%m/%d/%Y"), ChemicalDateRemoved = col_character()),
+)
+
+```
+
+## Quick exploration
+* Structure of dataset/table
+* Unique chemical names
+* Frequency of product type
+* Distribution of dates reported
+```{r}
+
+#structure of dataset
+str(cos_subset)
+
+#Unique chemical names - return list of values - commented out to limit output when knitted
+# unique(cos_subset$ChemicalName)
+
+#Frequency of product type - return list of values and frequencies
+table(cos_subset$PrimaryCategory)
+
+#Distribution of dates reported
+summary(cos_subset$InitialDateReported)
+
+
+
+```
+
+
+## Tidying the table
+
+Create a subset with:
+* only records for Titanium dioxide -
+  + Note that there two different relevant categories: Titanium dioxide AND Titanium dioxide (airborne, unbound particles of respirable size)
+* only the following columns: BrandName, ProductName, ChemicalName, InitialDateReported, ChemicalDateRemoved
+* only records with initial report date since 2015
+
+Try this using base R, ideally in one line of code:
+```{r tidy_base}
+
+#using subset - option for subsetting rows, but does not address the column issue!!
+cos_subset2 <- subset(cos_subset, ChemicalName %in% c("Titanium dioxide","Titanium dioxide (airborne, unbound particles of respirable size)") & year(InitialDateReported)>=2015)
+
+#selecting columns
+cos_subset3 <- cos_subset[ ,c("BrandName", "ProductName", "ChemicalName", "InitialDateReported", "ChemicalDateRemoved") ]
+
+#doing both in one "line"
+cos_subset3b <- cos_subset[which(cos_subset$ChemicalName %in% c("Titanium dioxide","Titanium dioxide (airborne, unbound particles of respirable size)") & year(cos_subset$InitialDateReported)>=2015) , 2:6]
+
+```
+
+Now try using the tidyverse. Once you have created the subset, remove any duplicate lines/rows and sort table to show by most recent date reported.
+```{r tidy_dplyr}
+
+cos_tidy <- cos_subset %>%
+  select(-c(CDPHId)) %>%
+  filter(ChemicalName %in% c("Titanium dioxide","Titanium dioxide (airborne, unbound particles of respirable size)") & year(InitialDateReported)>=2015) %>%
+  distinct() %>%
+  arrange(desc(InitialDateReported))
+
+```
+
+
+## Create new columns
+
+* Convert ChemicalDateRemoved from character to date 
+* Create a new variable (removed_yn) indicating if the chemical has been removed. If there is no chemical removed date, then we will assume it has not been removed.
+* Create a removal category (removal_cat): - skipped in live session
+  + Removed before reported
+  + Removed within 30 days of reporting
+  + Removed within year of reporting
+  + Not removed
+
+```{r new_columns}
+
+cos_removed <- cos_tidy %>%
+  mutate(
+    ChemicalDateRemoved_new = as_date(ChemicalDateRemoved, format="%m/%d/%Y"),
+    removed_yn = if_else(is.na(ChemicalDateRemoved_new),"No","Yes"),
+    days_to_removal = ChemicalDateRemoved_new - InitialDateReported,
+    removal_cat = case_when(
+      removed_yn == "Yes" & ChemicalDateRemoved_new<InitialDateReported ~ "Removed before reported",
+      removed_yn == "Yes" & days_to_removal<30 ~ "Removed within 30 days",
+      removed_yn == "Yes" & days_to_removal<365 ~ "Removed within 365 days",
+      removed_yn == "Yes" ~ "Removed more than 365 days",
+      TRUE ~ "Not removed"
+    )
+  )
+
+#check out newly created variable
+table(cos_removed$removal_cat)
+
+```
+
+## Final Summary
+
+Return two vectors: 
+1. Vector of all unique products with titanium dioxide (try this using base R)
+2. Vector of all unique products that removed Titanium dioxide (try this using tidyverse)
+
+```{r create_vectors}
+
+#one way to create a vector using base R
+cos_all_products_td <- unique(cos_removed$ProductName)
+
+#create a vector using dplyr
+cos_good <- cos_removed %>%
+  filter(removed_yn=="Yes") %>%
+  select(ProductName) %>%
+  distinct() %>%
+  pull()
+
+
+```
+
+Use the vectors above to store the total # products with titanium dioxide AND # products with titanium dioxide removed 
+```{r store_totals}
+
+total <- length(cos_all_products_td)
+
+removed <- length(cos_good)
+
+```
+
+Based on the total #/% of products with titanium dioxide removed, create an autogenerated summary based on the proportion of products with titanium dioxide removed. If >10% products, make the summary positive; otherwise, express disappointment.
+```{r summary}
+
+if(removed/total*100 > 10){
+  
+  headline <- "We are making progress! >10% of products have the chemical removed"
+  
+} else {
+  
+  headline <- "We still have a lot of work to do :("
+  
+}
+
+headline
+
+```
+
+```{r ad_hoc_questions}
+
+#Add percent - this version will convert it for a string
+paste0(round(removed/total*100,2),"%")
+
+#Check out scales package to keep it numeric
+
+
+```
+
