@@ -1,0 +1,72 @@
+---
+title: "PHW251 - F21_midterm_prep"
+author: "Avery Richards"
+date: "10/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+
+```{r}
+# load tidyverse
+library(tidyverse)
+
+# load penguins dataset
+install.packages("palmerpenguins")
+library(palmerpenguins)
+
+```
+
+Part 1. Import and explore the data
+
+```{r import_summary}
+
+
+```
+
+Return a summary of the distribution of penguin body mass observations
+
+```{r}
+
+
+```
+
+Return the unique names of species of penguins observed in the study
+```{r}
+
+
+```
+
+Part 2. Tidy the data
+
+Use `mutate()` with `if_else()` to make a new column that categorizes penguins with body mass less than or equal to 4050 as "smaller", otherwise "larger".  
+```{r}
+
+
+```
+
+
+Use`group_by()` and `summarise()` create a table that will display the counts of species for penguins in the "larger" category (Hint: you will need to also use a `filter()`. 
+
+Then use `mutate()` to add a new column of calculated values from the summarised table to display the proportion of penguins of each species.
+
+
+```{r final_table}
+
+
+
+```
+
+
+Bonus: print final table in a print-friendly fashion using `kable()`
+```{r kable}
+library(knitr)
+
+
+```
+
+
